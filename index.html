@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DealShunter – Amazon Preisfehler Bot</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Bebas+Neue&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --surface: #111;
+    --border: #222;
+    --accent: #ff3b30;
+    --green: #00ff88;
+    --yellow: #ffd60a;
+    --text: #e0d6c8;
+    --muted: #555;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    min-height: 100vh;
+  }
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    background: rgba(10,10,10,0.95);
+    backdrop-filter: blur(10px);
+    z-index: 100;
+  }
+  .logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2rem;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+  }
+  .logo span { color: var(--text); }
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.7rem;
+    color: var(--muted);
+  }
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  .main { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 16px;
+    text-align: center;
+  }
+  .stat-value {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2rem;
+    color: var(--accent);
+    line-height: 1;
+  }
+  .stat-label { font-size: 0.65rem; color: var(--muted); margin-top: 4px; letter-spacing: 0.1em; text-transform: uppercase; }
+
+  .section-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.4rem;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+  }
+
+  /* Add product form */
+  .add-form {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 20px;
+    margin-bottom: 32px;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+  }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-group label { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+  input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.85rem;
+    padding: 10px 14px;
+    outline: none;
+    transition: border-color 0.2s;
+    width: 100%;
+  }
+  input:focus { border-color: var(--accent); }
+  .btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.1rem;
+    letter-spacing: 0.1em;
+    padding: 10px 24px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    white-space: nowrap;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn.secondary { background: var(--border); }
+  .btn.green { background: var(--green); color: #000; }
+
+  /* Deal cards */
+  .deals-grid { display: flex; flex-direction: column; gap: 12px; }
+  .deal-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 20px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 20px;
+    align-items: center;
+    transition: border-color 0.3s;
+    position: relative;
+    overflow: hidden;
+  }
+  .deal-card.error {
+    border-color: var(--accent);
+    animation: flash 0.5s ease;
+  }
+  .deal-card.error::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(255,59,48,0.04);
+  }
+  @keyframes flash { 0%{background:#1a0000} 100%{background:var(--surface)} }
+
+  .deal-icon { font-size: 2rem; width: 48px; text-align: center; }
+  .deal-name { font-size: 0.85rem; font-weight: 700; margin-bottom: 4px; }
+  .deal-asin { font-size: 0.7rem; color: var(--muted); }
+  .deal-meta { display: flex; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
+  .deal-tag {
+    font-size: 0.65rem;
+    padding: 2px 8px;
+    background: var(--border);
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+
+  .deal-right { text-align: right; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+  .price-current {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2rem;
+    line-height: 1;
+    transition: color 0.3s;
+  }
+  .price-normal { font-size: 0.75rem; color: var(--muted); text-decoration: line-through; }
+  .badge {
+    font-size: 0.65rem;
+    padding: 3px 8px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .badge.error { background: var(--accent); color: #fff; }
+  .badge.deal { background: var(--green); color: #000; }
+  .badge.normal { background: var(--border); color: var(--muted); }
+  .badge.watching { background: var(--yellow); color: #000; }
+
+  .deal-actions { display: flex; gap: 8px; }
+  .btn-buy {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 0.95rem;
+    letter-spacing: 0.1em;
+    padding: 8px 18px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    transition: opacity 0.2s;
+  }
+  .btn-buy:hover { opacity: 0.85; }
+  .btn-buy.disabled { background: var(--border); color: var(--muted); pointer-events: none; }
+  .btn-remove {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.8rem;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+  }
+  .btn-remove:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Alerts log */
+  .alert-log {
+    margin-top: 32px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    max-height: 220px;
+    overflow-y: auto;
+  }
+  .alert-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.7rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+  }
+  .alert-entry {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    font-size: 0.75rem;
+  }
+  .alert-entry:last-child { border-bottom: none; }
+  .alert-time { color: var(--muted); min-width: 60px; font-size: 0.65rem; }
+  .alert-text { flex: 1; }
+  .alert-text .name { color: var(--text); }
+  .alert-text .price { color: var(--accent); font-weight: 700; }
+
+  .empty-state {
+    text-align: center;
+    padding: 48px;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+
+  @media (max-width: 600px) {
+    .stats-bar { grid-template-columns: repeat(2, 1fr); }
+    .deal-card { grid-template-columns: auto 1fr; }
+    .deal-right { grid-column: 1/-1; flex-direction: row; align-items: center; justify-content: space-between; }
+    .add-form { flex-direction: column; }
+    .form-group { width: 100%; }
+    input { width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Deal<span>Shunter</span></div>
+  <div class="status-bar">
+    <div class="dot" id="monitorDot"></div>
+    <span id="statusText">Monitoring aktiv</span>
+    <span id="lastCheck" style="margin-left:8px;">–</span>
+  </div>
+</header>
+
+<div class="main">
+  <!-- Stats -->
+  <div class="stats-bar">
+    <div class="stat-card">
+      <div class="stat-value" id="statWatching">0</div>
+      <div class="stat-label">Beobachtet</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="statErrors" style="color:var(--accent)">0</div>
+      <div class="stat-label">Preisfehler</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="statDeals" style="color:var(--green)">0</div>
+      <div class="stat-label">Deals</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="statChecks">0</div>
+      <div class="stat-label">Checks</div>
+    </div>
+  </div>
+
+  <!-- Add product -->
+  <div class="section-title">Produkt hinzufügen</div>
+  <div class="add-form">
+    <div class="form-group" style="flex:2;min-width:180px;">
+      <label>Produktname</label>
+      <input type="text" id="inputName" placeholder="z.B. Sony WH-1000XM5">
+    </div>
+    <div class="form-group" style="flex:1;min-width:140px;">
+      <label>Amazon ASIN</label>
+      <input type="text" id="inputAsin" placeholder="B09G3HRMVB" maxlength="12">
+    </div>
+    <div class="form-group" style="min-width:110px;">
+      <label>Normalpreis (€)</label>
+      <input type="number" id="inputNormal" placeholder="379.00" step="0.01" min="0">
+    </div>
+    <div class="form-group" style="min-width:110px;">
+      <label>Alarm unter (€)</label>
+      <input type="number" id="inputThreshold" placeholder="150.00" step="0.01" min="0">
+    </div>
+    <button class="btn" onclick="addProduct()">+ Hinzufügen</button>
+  </div>
+
+  <!-- Deals -->
+  <div class="section-title">Überwachte Produkte</div>
+  <div class="deals-grid" id="dealsGrid">
+    <div class="empty-state" id="emptyState">
+      Noch keine Produkte. Füge oben ein Produkt hinzu! 👆
+    </div>
+  </div>
+
+  <!-- Alert log -->
+  <div class="alert-log" style="margin-top:32px;">
+    <div class="alert-header">
+      <span>⚡ Alarm-Log</span>
+      <button class="btn-remove" onclick="clearLog()" style="padding:4px 10px;font-size:0.65rem;">Leeren</button>
+    </div>
+    <div id="alertLog">
+      <div class="empty-state" style="padding:24px;">Noch keine Alarme ausgelöst.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let products = JSON.parse(localStorage.getItem('ds_products') || '[]');
+  let checks = parseInt(localStorage.getItem('ds_checks') || '0');
+  let totalErrors = parseInt(localStorage.getItem('ds_errors') || '0');
+  let alerts = JSON.parse(localStorage.getItem('ds_alerts') || '[]');
+  let interval = null;
+
+  const ICONS = ['📦','🎧','📺','💻','🎮','📱','⌚','🖥️','🎵','🌀','📷','🔊'];
+
+  function save() {
+    localStorage.setItem('ds_products', JSON.stringify(products));
+    localStorage.setItem('ds_checks', checks);
+    localStorage.setItem('ds_errors', totalErrors);
+    localStorage.setItem('ds_alerts', JSON.stringify(alerts.slice(-100)));
+  }
+
+  function addProduct() {
+    const name = document.getElementById('inputName').value.trim();
+    const asin = document.getElementById('inputAsin').value.trim().toUpperCase();
+    const normal = parseFloat(document.getElementById('inputNormal').value);
+    const threshold = parseFloat(document.getElementById('inputThreshold').value);
+
+    if (!name || !asin || isNaN(normal) || isNaN(threshold)) {
+      alert('Bitte alle Felder ausfüllen!');
+      return;
+    }
+
+    const product = {
+      id: Date.now(),
+      name,
+      asin,
+      normalPrice: normal,
+      threshold,
+      currentPrice: normal,
+      status: 'watching',
+      icon: ICONS[Math.floor(Math.random() * ICONS.length)],
+      added: new Date().toLocaleTimeString('de-DE')
+    };
+
+    products.push(product);
+    save();
+    render();
+
+    document.getElementById('inputName').value = '';
+    document.getElementById('inputAsin').value = '';
+    document.getElementById('inputNormal').value = '';
+    document.getElementById('inputThreshold').value = '';
+  }
+
+  function removeProduct(id) {
+    products = products.filter(p => p.id !== id);
+    save();
+    render();
+  }
+
+  function simulatePrice(p) {
+    const roll = Math.random();
+    if (roll < 0.07) return +(p.normalPrice * (0.04 + Math.random() * 0.25)).toFixed(2);
+    if (roll < 0.25) return +(p.normalPrice * (0.65 + Math.random() * 0.15)).toFixed(2);
+    return +(p.normalPrice * (0.92 + Math.random() * 0.12)).toFixed(2);
+  }
+
+  function checkPrices() {
+    checks++;
+    let errors = 0, deals = 0;
+
+    products.forEach(p => {
+      const newPrice = simulatePrice(p);
+      const oldStatus = p.status;
+      p.currentPrice = newPrice;
+
+      if (newPrice <= p.threshold) {
+        p.status = 'error';
+        errors++;
+        if (oldStatus !== 'error') {
+          triggerAlert(p, newPrice);
+        }
+      } else if (newPrice < p.normalPrice * 0.75) {
+        p.status = 'deal';
+        deals++;
+      } else {
+        p.status = 'normal';
+      }
+    });
+
+    if (errors > 0) totalErrors += errors;
+
+    document.getElementById('lastCheck').textContent = 'Letzter Check: ' + new Date().toLocaleTimeString('de-DE');
+    document.getElementById('statChecks').textContent = checks;
+    document.getElementById('statErrors').textContent = products.filter(p=>p.status==='error').length;
+    document.getElementById('statDeals').textContent = products.filter(p=>p.status==='deal').length;
+
+    save();
+    render();
+  }
+
+  function triggerAlert(p, price) {
+    const entry = {
+      time: new Date().toLocaleTimeString('de-DE'),
+      name: p.name,
+      asin: p.asin,
+      price: price,
+      normal: p.normalPrice
+    };
+    alerts.unshift(entry);
+    renderAlerts();
+
+    // Browser notification (falls erlaubt)
+    if (Notification.permission === 'granted') {
+      new Notification('⚡ Preisfehler!', {
+        body: `${p.name}\n${price.toFixed(2)} € statt ${p.normalPrice.toFixed(2)} €`,
+        icon: '🔥'
+      });
+    }
+  }
+
+  function render() {
+    const grid = document.getElementById('dealsGrid');
+    const empty = document.getElementById('emptyState');
+
+    document.getElementById('statWatching').textContent = products.length;
+
+    if (products.length === 0) {
+      grid.innerHTML = '<div class="empty-state" id="emptyState">Noch keine Produkte. Füge oben ein Produkt hinzu! 👆</div>';
+      return;
+    }
+
+    grid.innerHTML = products.map(p => {
+      const pct = Math.round(((p.normalPrice - p.currentPrice) / p.normalPrice) * 100);
+      const isError = p.status === 'error';
+      const isDeal = p.status === 'deal';
+      const priceColor = isError ? 'var(--accent)' : isDeal ? 'var(--green)' : 'var(--text)';
+      const badgeClass = isError ? 'error' : isDeal ? 'deal' : 'normal';
+      const badgeText = isError ? '⚡ PREISFEHLER!' : isDeal ? `−${pct}% DEAL` : 'Normal';
+
+      return `
+        <div class="deal-card ${isError ? 'error' : ''}">
+          <div class="deal-icon">${p.icon}</div>
+          <div>
+            <div class="deal-name">${p.name}</div>
+            <div class="deal-asin">ASIN: ${p.asin}</div>
+            <div class="deal-meta">
+              <span class="deal-tag">Normalpreis: ${p.normalPrice.toFixed(2)} €</span>
+              <span class="deal-tag">Alarm unter: ${p.threshold.toFixed(2)} €</span>
+            </div>
+          </div>
+          <div class="deal-right">
+            <div class="price-current" style="color:${priceColor}">${p.currentPrice.toFixed(2)} €</div>
+            <div class="price-normal">${p.normalPrice.toFixed(2)} € UVP</div>
+            <span class="badge ${badgeClass}">${badgeText}</span>
+            <div class="deal-actions">
+              <a class="btn-buy ${!isError && !isDeal ? 'disabled' : ''}" 
+                 href="https://www.amazon.de/dp/${p.asin}" 
+                 target="_blank" rel="noopener">
+                🛒 Kaufen
+              </a>
+              <button class="btn-remove" onclick="removeProduct(${p.id})">✕</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderAlerts() {
+    const log = document.getElementById('alertLog');
+    if (alerts.length === 0) {
+      log.innerHTML = '<div class="empty-state" style="padding:24px;">Noch keine Alarme ausgelöst.</div>';
+      return;
+    }
+    log.innerHTML = alerts.slice(0, 50).map(a => `
+      <div class="alert-entry">
+        <span class="alert-time">${a.time}</span>
+        <span class="alert-text">
+          <span class="name">${a.name}</span> — 
+          <span class="price">${a.price.toFixed(2)} €</span> 
+          <span style="color:var(--muted)">statt ${a.normal.toFixed(2)} €</span>
+        </span>
+        <a href="https://www.amazon.de/dp/${a.asin}" target="_blank" style="color:var(--accent);font-size:0.7rem;text-decoration:none;">→ Kaufen</a>
+      </div>
+    `).join('');
+  }
+
+  function clearLog() {
+    alerts = [];
+    save();
+    renderAlerts();
+  }
+
+  // Start monitoring
+  function startMonitoring() {
+    if (interval) clearInterval(interval);
+    interval = setInterval(() => {
+      if (products.length > 0) checkPrices();
+    }, 8000); // alle 8 Sekunden simulieren
+  }
+
+  // Notification permission
+  if (Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+
+  // Init
+  render();
+  renderAlerts();
+  startMonitoring();
+
+  // Demo: Startprodukte wenn leer
+  if (products.length === 0) {
+    const demos = [
+      { name: 'Sony WH-1000XM5 Kopfhörer', asin: 'B09G3HRMVB', normalPrice: 379, threshold: 80 },
+      { name: 'Apple AirPods Pro (2. Gen)', asin: 'B0CHX2QCQF', normalPrice: 249, threshold: 60 },
+    ];
+    demos.forEach(d => {
+      document.getElementById('inputName').value = d.name;
+      document.getElementById('inputAsin').value = d.asin;
+      document.getElementById('inputNormal').value = d.normalPrice;
+      document.getElementById('inputThreshold').value = d.threshold;
+      addProduct();
+    });
+  }
+</script>
+</body>
+</html>
